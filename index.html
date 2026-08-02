@@ -14,6 +14,7 @@
     --line: #e6e4de;
     --ink: #15161a;
     --ink-muted: #83837e;
+    --muted-rgb: 131,131,126;
     --accent: #2a46e8;
     --accent-rgb: 42,70,232;
 
@@ -112,7 +113,7 @@
     padding-bottom: 10px; border-bottom:1px solid var(--line);
   }
   .spine{
-    flex:1 1 0; min-width:1px; cursor:pointer;
+    flex:1 1 0; min-width:3px; cursor:pointer;
     transition: opacity .12s ease;
     position:relative;
     background: var(--accent);
@@ -142,6 +143,12 @@
   /* ---------- custom years chart (SVG, no libs) ---------- */
   .years-wrap{ width:100%; }
   .years-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+  /* ---------- season wheel (radial, month-of-year seasonality) ---------- */
+  .season-wrap{ display:flex; align-items:center; gap:52px; flex-wrap:wrap; }
+  .season-wheel{ width:240px; height:240px; flex:0 0 auto; }
+  .season-wheel svg{ width:100%; height:100%; display:block; overflow:visible; }
+  .season-month-label{ font-family:'JetBrains Mono',monospace; font-size:10.5px; fill:var(--ink-muted); }
 
   /* ---------- rating bars (custom, no libs) ---------- */
   .rating-bars{ display:flex; flex-direction:column; gap:14px; }
@@ -279,6 +286,17 @@
     </section>
 
     <section class="block">
+      <div class="block-head">
+        <h2>Сезонність читання</h2>
+        <span class="note">у який місяць року читаєте найбільше (за всі роки разом)</span>
+      </div>
+      <div class="season-wrap">
+        <div class="season-wheel" id="seasonWheel"></div>
+        <div id="seasonStat"></div>
+      </div>
+    </section>
+
+    <section class="block">
       <div class="two-col">
         <div>
           <h3 class="panel-title">Оцінки</h3>
@@ -350,10 +368,13 @@
   "use strict";
 
   // Single-accent rating ramp: opacity of the one accent color scales with rating.
-  const ratingAlpha = { 0:.10, 1:.16, 2:.34, 3:.52, 4:.74, 5:1 };
+  // Unrated books are a separate neutral-gray state, not "the faintest rating" —
+  // otherwise they'd fade into invisibility instead of reading as "not yet rated".
+  const ratingAlpha = { 1:.22, 2:.40, 3:.58, 4:.78, 5:1 };
   function ratingColor(r){
-    const a = ratingAlpha[Math.round(r||0)] ?? .10;
-    return `rgba(var(--accent-rgb),${a})`;
+    const rounded = Math.round(r||0);
+    if (!rounded) return `rgba(var(--muted-rgb),.4)`;
+    return `rgba(var(--accent-rgb),${ratingAlpha[rounded] ?? .22})`;
   }
 
   const dropzone = document.getElementById('dropzone');
@@ -548,6 +569,7 @@
     renderHero(read, toRead, reading);
     renderShelf(read);
     renderYearsChart(read);
+    renderSeasonWheel(read);
     renderRatingChart(read);
     renderAuthorList(read);
     renderPublisherList(read);
@@ -630,12 +652,14 @@
       el.addEventListener('touchstart', (e) => showTooltip(e.touches[0], b), { passive:true });
     });
 
+    const hasUnrated = list.some(b => !b.rating);
     document.getElementById('shelfLegend').innerHTML = `
       <span>оцінка:</span>
       <span class="sl-ramp">
         ${[1,2,3,4,5].map(r => `<span class="legend-dot" style="background:${ratingColor(r)}"></span>`).join('')}
       </span>
       <span>1 → 5 ★</span>
+      ${hasUnrated ? `<span><span class="legend-dot" style="background:${ratingColor(0)}"></span>без оцінки</span>` : ''}
     `;
   }
 
@@ -702,6 +726,84 @@
         </style>
         ${bars}
       </svg>
+    `;
+  }
+
+  const monthLabelsUA = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
+  const monthFullUA = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+
+  function renderSeasonWheel(read){
+    const wheelWrap = document.getElementById('seasonWheel');
+    const statWrap = document.getElementById('seasonStat');
+    const withDate = read.filter(b => b.dateRead);
+
+    if (!withDate.length){
+      wheelWrap.innerHTML = '';
+      statWrap.innerHTML = '<p style="color:var(--ink-muted); font-size:13px;">Немає дат прочитання.</p>';
+      return;
+    }
+
+    const counts = new Array(12).fill(0);
+    withDate.forEach(b => { counts[b.dateRead.getMonth()]++; });
+    const maxCount = Math.max(...counts);
+    const total = withDate.length;
+
+    const cx = 130, cy = 130;
+    const rInner = 32, rOuterMax = 104, labelR = 122;
+
+    // Clockwise polar coords with 0° = straight up (January), matching the
+    // SVG rotate() transform used for the spokes below.
+    function polar(r, angleDeg){
+      const rad = angleDeg * Math.PI / 180;
+      return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+    }
+
+    let spokes = '';
+    let labels = '';
+    for (let m = 0; m < 12; m++){
+      const angle = m * 30;
+      const len = maxCount ? (counts[m] / maxCount) * (rOuterMax - rInner) : 0;
+      const rOuter = rInner + Math.max(len, 3);
+      const opacity = counts[m] ? 1 : .18;
+      spokes += `<line data-m="${m}" x1="${cx}" y1="${cy-rInner}" x2="${cx}" y2="${(cy-rOuter).toFixed(1)}" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" opacity="${opacity}" transform="rotate(${angle} ${cx} ${cy})" style="cursor:pointer;"></line>`;
+      const lp = polar(labelR, angle);
+      labels += `<text x="${lp.x.toFixed(1)}" y="${lp.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" class="season-month-label">${monthLabelsUA[m]}</text>`;
+    }
+
+    wheelWrap.innerHTML = `
+      <svg viewBox="0 0 260 260" overflow="visible" role="img" aria-label="Книжок прочитано по місяцях року">
+        <circle cx="${cx}" cy="${cy}" r="${rInner}" fill="none" stroke="var(--line)" stroke-width="1"></circle>
+        ${spokes}
+        ${labels}
+      </svg>
+    `;
+
+    function showSeasonTooltip(e, m){
+      const count = counts[m];
+      const pct = total ? Math.round((count/total)*100) : 0;
+      tooltip.innerHTML = `
+        <span class="tt-title">${monthFullUA[m]}</span>
+        <span class="tt-meta">${count} ${pluralUA(count,'книжка','книжки','книжок')}${total ? ` · ${pct}%` : ''}</span>
+      `;
+      positionTooltip(e);
+      tooltip.style.opacity = '1';
+    }
+
+    wheelWrap.querySelectorAll('line[data-m]').forEach(el => {
+      const m = +el.dataset.m;
+      el.addEventListener('mouseenter', (e) => showSeasonTooltip(e, m));
+      el.addEventListener('mousemove', (e) => positionTooltip(e));
+      el.addEventListener('mouseleave', hideTooltip);
+      el.addEventListener('touchstart', (e) => showSeasonTooltip(e.touches[0], m), { passive:true });
+    });
+
+    const bestIdx = counts.indexOf(maxCount);
+    statWrap.innerHTML = `
+      <div class="fact-card" style="border-top:none; padding-top:0;">
+        <span class="fk">Найактивніший місяць</span>
+        <span class="fv">${monthLabelsUA[bestIdx]}</span>
+        <span class="fs">${maxCount} ${pluralUA(maxCount,'книжка','книжки','книжок')} з ${total} загалом</span>
+      </div>
     `;
   }
 
