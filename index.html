@@ -150,6 +150,16 @@
   .season-wheel svg{ width:100%; height:100%; display:block; overflow:visible; }
   .season-month-label{ font-family:'JetBrains Mono',monospace; font-size:10.5px; fill:var(--ink-muted); }
 
+  /* ---------- count/pages metric toggle ---------- */
+  .metric-toggle{ display:flex; gap:14px; }
+  .metric-toggle button{
+    background:none; border:none; padding:2px 0; cursor:pointer;
+    font-family:var(--mono); font-size:11.5px; color:var(--ink-muted);
+    border-bottom:1px solid transparent;
+  }
+  .metric-toggle button:hover{ color:var(--ink); }
+  .metric-toggle button.active{ color:var(--accent); border-bottom-color:var(--accent); }
+
   /* ---------- rating bars (custom, no libs) ---------- */
   .rating-bars{ display:flex; flex-direction:column; gap:14px; }
   .rating-row{ display:grid; grid-template-columns:32px 1fr 26px; align-items:center; gap:12px; }
@@ -280,7 +290,10 @@
     <section class="block">
       <div class="block-head">
         <h2>Роки читання</h2>
-        <span class="note">книжок прочитано за роками</span>
+        <div class="metric-toggle" id="yearsToggle">
+          <button type="button" data-mode="count" class="active">книжки</button>
+          <button type="button" data-mode="pages">сторінки</button>
+        </div>
       </div>
       <div class="years-wrap" id="yearsChart"></div>
     </section>
@@ -399,6 +412,26 @@
   let tableBooksAll = [];
   let tableSort = { key:'title', dir:1 };
   let tableQuery = '';
+
+  // ---------- count/pages metric toggle (years chart only — see renderSeasonWheel note) ----------
+  const yearsToggle = document.getElementById('yearsToggle');
+  let cachedReadBooks = [];
+  let yearsMode = 'count';
+
+  function resetMetricToggle(toggleEl){
+    toggleEl.querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'count'));
+  }
+  function wireMetricToggle(toggleEl, onChange){
+    toggleEl.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('active')) return;
+        toggleEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onChange(btn.dataset.mode);
+      });
+    });
+  }
+  wireMetricToggle(yearsToggle, (mode) => { yearsMode = mode; renderYearsChart(cachedReadBooks); });
 
   function toggleTableSection(){
     const isOpen = tableSection.style.display !== 'none';
@@ -565,6 +598,9 @@
     const read = books.filter(b => b.shelf === 'read');
     const toRead = books.filter(b => b.shelf === 'to-read');
     const reading = books.filter(b => b.shelf === 'currently-reading');
+    cachedReadBooks = read;
+    yearsMode = 'count';
+    resetMetricToggle(yearsToggle);
 
     renderHero(read, toRead, reading);
     renderShelf(read);
@@ -697,8 +733,8 @@
     const yearsArr = Object.keys(byYear).sort();
     if (!yearsArr.length){ wrap.innerHTML = '<p style="color:var(--ink-muted); font-size:13px;">Немає дат прочитання.</p>'; return; }
 
-    const counts = yearsArr.map(y => byYear[y].count);
-    const maxCount = Math.max(...counts);
+    const values = yearsArr.map(y => yearsMode === 'pages' ? byYear[y].pages : byYear[y].count);
+    const maxVal = Math.max(...values);
 
     const W = Math.max(yearsArr.length * 90, 320);
     const H = 200;
@@ -710,16 +746,18 @@
     let bars = '';
     yearsArr.forEach((y, i) => {
       const cx = step * i + step/2;
-      const barH = maxCount ? (counts[i]/maxCount) * plotH : 0;
+      const barH = maxVal ? (values[i]/maxVal) * plotH : 0;
       const barX = cx - barW/2;
       const barY = H - padBottom - barH;
+      const label = yearsMode === 'pages' ? fmt(values[i]) : values[i];
       bars += `<rect x="${barX.toFixed(1)}" y="${barY.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH,1).toFixed(1)}" fill="var(--accent)"></rect>`;
-      bars += `<text x="${cx.toFixed(1)}" y="${(barY-10).toFixed(1)}" text-anchor="middle" class="years-num">${counts[i]}</text>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${(barY-10).toFixed(1)}" text-anchor="middle" class="years-num">${label}</text>`;
       bars += `<text x="${cx.toFixed(1)}" y="${H-8}" text-anchor="middle" class="years-yr">${y}</text>`;
     });
 
+    const label = yearsMode === 'pages' ? 'Сторінок прочитано за роками' : 'Книжок прочитано за роками';
     wrap.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Книжок прочитано за роками">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="${label}">
         <style>
           .years-num{ font-family:'JetBrains Mono',monospace; font-size:11px; fill:var(--ink); }
           .years-yr{ font-family:'JetBrains Mono',monospace; font-size:11px; fill:var(--ink-muted); }
@@ -743,10 +781,15 @@
       return;
     }
 
+    // Pages are intentionally not offered as a metric here: Goodreads has no
+    // "date started" field, so a long book finished in July would dump its
+    // whole page count into July even though most of it was read earlier.
+    // That distortion is small for year-sized buckets but large for month-sized
+    // ones, so we only show book counts (a "finished in July" fact is always true).
     const counts = new Array(12).fill(0);
     withDate.forEach(b => { counts[b.dateRead.getMonth()]++; });
-    const maxCount = Math.max(...counts);
     const total = withDate.length;
+    const maxVal = Math.max(...counts);
 
     const cx = 130, cy = 130;
     const rInner = 32, rOuterMax = 104, labelR = 122;
@@ -762,7 +805,7 @@
     let labels = '';
     for (let m = 0; m < 12; m++){
       const angle = m * 30;
-      const len = maxCount ? (counts[m] / maxCount) * (rOuterMax - rInner) : 0;
+      const len = maxVal ? (counts[m] / maxVal) * (rOuterMax - rInner) : 0;
       const rOuter = rInner + Math.max(len, 3);
       const opacity = counts[m] ? 1 : .18;
       spokes += `<line data-m="${m}" x1="${cx}" y1="${cy-rInner}" x2="${cx}" y2="${(cy-rOuter).toFixed(1)}" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" opacity="${opacity}" transform="rotate(${angle} ${cx} ${cy})" style="cursor:pointer;"></line>`;
@@ -779,11 +822,11 @@
     `;
 
     function showSeasonTooltip(e, m){
-      const count = counts[m];
-      const pct = total ? Math.round((count/total)*100) : 0;
+      const pct = total ? Math.round((counts[m]/total)*100) : 0;
+      const meta = `${counts[m]} ${pluralUA(counts[m],'книжка','книжки','книжок')}${total ? ` · ${pct}%` : ''}`;
       tooltip.innerHTML = `
         <span class="tt-title">${monthFullUA[m]}</span>
-        <span class="tt-meta">${count} ${pluralUA(count,'книжка','книжки','книжок')}${total ? ` · ${pct}%` : ''}</span>
+        <span class="tt-meta">${meta}</span>
       `;
       positionTooltip(e);
       tooltip.style.opacity = '1';
@@ -797,12 +840,12 @@
       el.addEventListener('touchstart', (e) => showSeasonTooltip(e.touches[0], m), { passive:true });
     });
 
-    const bestIdx = counts.indexOf(maxCount);
+    const bestIdx = counts.indexOf(maxVal);
     statWrap.innerHTML = `
       <div class="fact-card" style="border-top:none; padding-top:0;">
         <span class="fk">Найактивніший місяць</span>
         <span class="fv">${monthLabelsUA[bestIdx]}</span>
-        <span class="fs">${maxCount} ${pluralUA(maxCount,'книжка','книжки','книжок')} з ${total} загалом</span>
+        <span class="fs">${counts[bestIdx]} ${pluralUA(counts[bestIdx],'книжка','книжки','книжок')} з ${total} загалом</span>
       </div>
     `;
   }
