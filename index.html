@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Читацький формуляр — статистика Goodreads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #fcfcfb;
+    --surface: #f4f3f0;
+    --line: #e6e4de;
+    --ink: #15161a;
+    --ink-muted: #83837e;
+    --accent: #2a46e8;
+    --accent-rgb: 42,70,232;
+
+    --sans: 'Inter', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-weight:400;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:inherit; }
+  ::selection{ background: rgba(var(--accent-rgb),.18); color: var(--ink); }
+
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 32px; }
+
+  /* ---------- header ---------- */
+  header.top{ padding:80px 0 40px; }
+  .eyebrow{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:22px;
+  }
+  h1.title{
+    font-family:var(--sans); font-weight:250; font-size:clamp(34px,5.4vw,58px);
+    margin:0 0 18px; color:var(--ink); letter-spacing:-0.02em; line-height:1.08;
+  }
+  .lede{ max-width:520px; color:var(--ink-muted); font-size:16.5px; font-weight:350; margin:0; }
+
+  .top-actions{ display:flex; justify-content:flex-end; margin-top:-40px; padding-bottom:12px; }
+  .ghost-btn{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.04em;
+    background:transparent; border:none; color:var(--ink-muted);
+    padding:6px 0; cursor:pointer; border-bottom:1px solid transparent; transition:.2s;
+  }
+  .ghost-btn:hover{ color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* ---------- upload zone ---------- */
+  #uploadStage{ padding:20px 0 100px; }
+  .dropzone{
+    position:relative;
+    border:1px dashed var(--line);
+    border-radius:2px;
+    padding:80px 32px;
+    text-align:center;
+    max-width:600px; margin:48px auto 0;
+    cursor:pointer;
+    transition: border-color .2s;
+  }
+  .dropzone.drag{ border-color:var(--accent); }
+  .dropzone svg{ width:32px; height:32px; margin-bottom:22px; color:var(--accent); stroke-width:1.1; }
+  .dropzone h2{ font-family:var(--sans); font-weight:300; font-size:22px; margin:0 0 10px; letter-spacing:-.01em; }
+  .dropzone p{ margin:0 0 28px; color:var(--ink-muted); font-size:14px; font-weight:350; }
+  .dropzone .stamp-btn{
+    font-family:var(--mono); font-size:12px; letter-spacing:.04em;
+    background:var(--accent); color:#fff; border:none; padding:13px 26px; border-radius:2px; cursor:pointer;
+    transition: opacity .2s;
+  }
+  .dropzone .stamp-btn:hover{ opacity:.85; }
+  .dropzone .hint{ margin-top:20px; font-family:var(--mono); font-size:10.5px; color:var(--ink-muted); opacity:.7; }
+  #fileInput{ display:none; }
+  #parseError{ max-width:600px; margin:16px auto 0; color:var(--accent); font-family:var(--mono); font-size:13px; text-align:center; display:none; }
+
+  /* ---------- app (post-upload) ---------- */
+  #app{ display:none; }
+
+  /* section shell */
+  section.block{ padding:64px 0; border-top:1px solid var(--line); }
+  section.block:first-of-type{ border-top:none; padding-top:8px; }
+  .block-head{ display:flex; align-items:baseline; justify-content:space-between; gap:20px; margin-bottom:34px; flex-wrap:wrap; }
+  .block-head h2{ font-family:var(--sans); font-weight:300; font-size:clamp(20px,2.6vw,26px); margin:0; letter-spacing:-.01em; }
+  .block-head .note{ font-family:var(--mono); font-size:11.5px; color:var(--ink-muted); }
+
+  /* ---------- hero stat row ---------- */
+  .hero-grid{
+    display:flex; flex-wrap:wrap; gap:0;
+  }
+  .stat-card{
+    flex:1 1 150px; padding:0 28px 0 0; margin-right:28px; border-right:1px solid var(--line);
+  }
+  .stat-card:last-child{ border-right:none; }
+  .stat-card .num{ font-family:var(--mono); font-weight:500; font-size:clamp(26px,3.2vw,36px); display:block; letter-spacing:-.01em; color:var(--ink); }
+  .stat-card .lbl{ font-size:12px; color:var(--ink-muted); margin-top:8px; display:block; font-weight:400; }
+
+  /* ---------- shelf (signature: barcode of books) ---------- */
+  .shelf-outer{ padding-top:4px; }
+  .shelf-scroll{ overflow-x:auto; padding-bottom:16px; }
+  .shelf-row{
+    display:flex; align-items:flex-end; gap:1px; min-height:150px; width:100%; position:relative;
+    padding-bottom: 10px; border-bottom:1px solid var(--line);
+  }
+  .spine{
+    flex:1 1 0; min-width:1px; cursor:pointer;
+    transition: opacity .12s ease;
+    position:relative;
+    background: var(--accent);
+  }
+  .spine:hover{ opacity:.65; }
+  .spine.reread::after{
+    content:''; position:absolute; top:-12px; left:50%; transform:translateX(-50%);
+    width:3px; height:3px; border-radius:50%; background:var(--accent);
+  }
+  .shelf-legend{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding-top:16px; font-family:var(--mono); font-size:11px; color:var(--ink-muted); }
+  .shelf-legend .sl-ramp{ display:flex; align-items:center; gap:3px; }
+  .legend-dot{ display:inline-block; width:10px; height:10px; }
+
+  #tooltip{
+    position:fixed; pointer-events:none; z-index:50; background:#fff; color:var(--ink);
+    border:1px solid var(--line); border-radius:2px; padding:12px 14px; font-size:13px;
+    max-width:230px; box-shadow:0 12px 32px rgba(20,20,20,.10); opacity:0; transition:opacity .12s;
+  }
+  #tooltip .tt-title{ font-family:var(--sans); font-weight:500; font-size:14px; display:block; margin-bottom:4px; letter-spacing:-.005em; }
+  #tooltip .tt-meta{ color:var(--ink-muted); font-size:12px; }
+  #tooltip .tt-stars{ color:var(--accent); letter-spacing:1px; margin-top:5px; display:block; font-size:12px; }
+
+  /* ---------- two-col panels ---------- */
+  .two-col{ display:grid; grid-template-columns:1.3fr 1fr; gap:56px; align-items:start; }
+  @media (max-width:820px){ .two-col{ grid-template-columns:1fr; gap:44px; } }
+  .panel-title{ font-family:var(--sans); font-weight:400; font-size:16px; margin:0 0 22px; color:var(--ink); }
+
+  /* ---------- custom years chart (SVG, no libs) ---------- */
+  .years-wrap{ width:100%; }
+  .years-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+  /* ---------- rating bars (custom, no libs) ---------- */
+  .rating-bars{ display:flex; flex-direction:column; gap:14px; }
+  .rating-row{ display:grid; grid-template-columns:32px 1fr 26px; align-items:center; gap:12px; }
+  .rating-row .rr-label{ font-family:var(--mono); font-size:12px; color:var(--ink-muted); text-align:right; }
+  .rating-row .rr-track{ background:var(--surface); height:6px; overflow:hidden; }
+  .rating-row .rr-fill{ display:block; height:100%; min-width:2px; transition:width .5s ease; background:var(--accent); }
+  .rating-row .rr-count{ font-family:var(--mono); font-size:12px; color:var(--ink-muted); }
+
+  .author-list{ list-style:none; margin:0; padding:0; }
+  .author-list li{
+    display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line);
+    font-size:14px; font-weight:350;
+  }
+  .author-list li:last-child{ border-bottom:none; }
+  .author-rank{ font-family:var(--mono); color:var(--ink-muted); font-size:11px; width:18px; flex:0 0 auto; }
+  .author-name{ flex:1; }
+  .author-count{ font-family:var(--mono); font-size:12px; color:var(--accent); }
+
+  /* ---------- decades timeline ---------- */
+  .decade-ruler{ display:flex; align-items:flex-end; gap:8px; height:130px; }
+  .decade-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:9px; height:100%; }
+  .decade-bar{ width:100%; max-width:26px; background:var(--accent); min-height:2px; }
+  .decade-label{ font-family:var(--mono); font-size:10px; color:var(--ink-muted); }
+  .decade-count{ font-family:var(--mono); font-size:11px; color:var(--ink); }
+
+  /* ---------- facts grid ---------- */
+  .facts-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:36px 28px; }
+  .fact-card{
+    padding-top:18px; border-top:1px solid var(--line);
+    display:flex; flex-direction:column; gap:7px;
+  }
+  .fact-card .fk{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+  .fact-card .fv{ font-family:var(--sans); font-weight:400; font-size:16.5px; line-height:1.35; color:var(--ink); }
+  .fact-card .fs{ font-size:12.5px; color:var(--ink-muted); }
+
+  /* ---------- all-books table (collapsible) ---------- */
+  .table-toggle{ cursor:pointer; user-select:none; }
+  .table-toggle .note{ display:flex; align-items:center; gap:6px; }
+  .table-toggle:hover h2{ color:var(--accent); }
+  .chevron{ display:inline-block; transition: transform .2s ease; font-size:10px; }
+  .chevron.open{ transform: rotate(180deg); }
+
+  .table-search{
+    width:100%; padding:10px 0; margin-bottom:18px; border:none; border-bottom:1px solid var(--line);
+    font-family:var(--sans); font-size:14px; font-weight:350; background:transparent; color:var(--ink);
+  }
+  .table-search:focus{ outline:none; border-bottom-color:var(--accent); }
+  .table-search::placeholder{ color:var(--ink-muted); }
+
+  .table-scroll{ max-height:520px; overflow:auto; border-top:1px solid var(--line); }
+  #booksTable{ width:100%; border-collapse:collapse; font-size:13px; }
+  #booksTable thead th{
+    position:sticky; top:0; background:var(--bg); text-align:left; padding:10px 14px 10px 0;
+    font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-muted); cursor:pointer; white-space:nowrap; border-bottom:1px solid var(--line);
+    user-select:none;
+  }
+  #booksTable thead th:hover{ color:var(--accent); }
+  #booksTable thead th.sort-active{ color:var(--accent); }
+  #booksTable thead th .arrow{ margin-left:3px; opacity:.8; font-size:10px; }
+  #booksTable tbody td{ padding:9px 14px 9px 0; border-bottom:1px solid var(--line); white-space:nowrap; color:var(--ink); }
+  #booksTable tbody td.title-cell{ white-space:normal; max-width:260px; font-weight:450; }
+  #booksTable tbody td.muted{ color:var(--ink-muted); }
+  #booksTable tbody tr:hover{ background:var(--surface); }
+  #booksTable tbody td.empty-row{ text-align:center; color:var(--ink-muted); padding:30px 0; white-space:normal; }
+
+  .table-meta{ margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--ink-muted); }
+
+  footer{ padding:50px 0 70px; text-align:center; color:var(--ink-muted); font-family:var(--mono); font-size:11px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; animation:none !important; }
+    html{ scroll-behavior:auto; }
+  }
+
+  @media (max-width:600px){
+    .top-actions{ margin-top:16px; justify-content:flex-start; }
+    header.top{ padding:48px 0 24px; }
+    .stat-card{ flex:1 1 42%; padding-right:16px; margin-right:16px; margin-bottom:20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Читацький формуляр</div>
+    <h1 class="title">Ваша бібліотека у цифрах</h1>
+    <p class="lede">Завантажте експорт із Goodreads — і побачите, як виглядає ваш рік (чи роки) серед книжок: полиця прочитаного, ритм читання, найдовші книжки й найзапекліші улюбленці.</p>
+  </header>
+  <div class="top-actions" id="topActions" style="display:none;">
+    <button class="ghost-btn" id="resetBtn">Завантажити інший файл</button>
+  </div>
+</div>
+
+<div class="wrap" id="uploadStage">
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Завантажити CSV-файл">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V6.5A2.5 2.5 0 0 1 6.5 4H12l2 2h5.5A2.5 2.5 0 0 1 20 8.5V17M4 19.5A2.5 2.5 0 0 0 6.5 22H20a2 2 0 0 0 2-2V17"/></svg>
+    <h2>Перетягніть сюди свій файл</h2>
+    <p>goodreads_library_export.csv — обробка відбувається просто у вашому браузері, файл нікуди не надсилається.</p>
+    <button class="stamp-btn" type="button" id="chooseBtn">Обрати файл</button>
+    <div class="hint">Export із Goodreads: Settings → Import/Export → Export Library</div>
+    <input type="file" id="fileInput" accept=".csv,text/csv">
+  </div>
+  <p id="parseError"></p>
+</div>
+
+<div id="app">
+  <div class="wrap">
+
+    <section class="block" id="hero-section">
+      <div class="hero-grid" id="heroGrid"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>Полиця прочитаного</h2>
+        <span class="note">товщина — сторінки, насиченість — оцінка · наведіть для деталей</span>
+      </div>
+      <div class="shelf-outer">
+        <div class="shelf-scroll">
+          <div class="shelf-row" id="shelfRow"></div>
+        </div>
+        <div class="shelf-legend" id="shelfLegend"></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>Роки читання</h2>
+        <span class="note">книжок прочитано за роками</span>
+      </div>
+      <div class="years-wrap" id="yearsChart"></div>
+    </section>
+
+    <section class="block">
+      <div class="two-col">
+        <div>
+          <h3 class="panel-title">Оцінки</h3>
+          <div class="rating-bars" id="ratingChart"></div>
+        </div>
+        <div>
+          <h3 class="panel-title">Найчастіші автори</h3>
+          <ul class="author-list" id="authorList"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>Крізь епохи</h2>
+        <span class="note">рік першого видання прочитаних книжок</span>
+      </div>
+      <div class="decade-ruler" id="decadeRuler"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>Цікаві факти</h2>
+      </div>
+      <div class="facts-grid" id="factsGrid"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head table-toggle" id="tableToggle" role="button" tabindex="0" aria-expanded="false">
+        <h2>Усі книжки</h2>
+        <span class="note"><span id="tableToggleLabel">розгорнути</span> <span class="chevron" id="tableChevron">▾</span></span>
+      </div>
+      <div id="tableSection" style="display:none;">
+        <input type="text" id="tableSearch" class="table-search" placeholder="Пошук за назвою чи автором…">
+        <div class="table-scroll">
+          <table id="booksTable">
+            <thead>
+              <tr>
+                <th data-key="title">Назва</th>
+                <th data-key="author">Автор</th>
+                <th data-key="shelf">Полиця</th>
+                <th data-key="rating">Оцінка</th>
+                <th data-key="pages">Стор.</th>
+                <th data-key="pubYear">Рік вид.</th>
+                <th data-key="dateRead">Прочитано</th>
+                <th data-key="dateAdded">Додано</th>
+                <th data-key="readCount">Разів</th>
+                <th data-key="publisher">Видавництво</th>
+              </tr>
+            </thead>
+            <tbody id="booksTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-meta" id="tableMeta"></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Single-accent rating ramp: opacity of the one accent color scales with rating.
+  const ratingAlpha = { 0:.10, 1:.16, 2:.34, 3:.52, 4:.74, 5:1 };
+  function ratingColor(r){
+    const a = ratingAlpha[Math.round(r||0)] ?? .10;
+    return `rgba(var(--accent-rgb),${a})`;
+  }
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const parseError = document.getElementById('parseError');
+  const uploadStage = document.getElementById('uploadStage');
+  const app = document.getElementById('app');
+  const topActions = document.getElementById('topActions');
+  const resetBtn = document.getElementById('resetBtn');
+  const tooltip = document.getElementById('tooltip');
+
+  // ---------- all-books table state ----------
+  const tableToggle = document.getElementById('tableToggle');
+  const tableSection = document.getElementById('tableSection');
+  const tableChevron = document.getElementById('tableChevron');
+  const tableToggleLabel = document.getElementById('tableToggleLabel');
+  const tableSearch = document.getElementById('tableSearch');
+  const tableBody = document.getElementById('booksTableBody');
+  const tableMeta = document.getElementById('tableMeta');
+  const tableHeaders = document.querySelectorAll('#booksTable thead th');
+  let tableBooksAll = [];
+  let tableSort = { key:'title', dir:1 };
+  let tableQuery = '';
+
+  function toggleTableSection(){
+    const isOpen = tableSection.style.display !== 'none';
+    tableSection.style.display = isOpen ? 'none' : 'block';
+    tableChevron.classList.toggle('open', !isOpen);
+    tableToggleLabel.textContent = isOpen ? 'розгорнути' : 'згорнути';
+    tableToggle.setAttribute('aria-expanded', String(!isOpen));
+  }
+  tableToggle.addEventListener('click', toggleTableSection);
+  tableToggle.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTableSection(); } });
+
+  tableSearch.addEventListener('input', (e) => {
+    tableQuery = e.target.value.trim().toLowerCase();
+    renderTableBody();
+  });
+
+  tableHeaders.forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (tableSort.key === key) tableSort.dir *= -1;
+      else tableSort = { key, dir:1 };
+      renderTableBody();
+    });
+  });
+
+  chooseBtn.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('click', (e) => { if(e.target !== chooseBtn) fileInput.click(); });
+  dropzone.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+
+  ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileInput.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) handleFile(f);
+  });
+  resetBtn.addEventListener('click', () => {
+    app.style.display = 'none';
+    topActions.style.display = 'none';
+    uploadStage.style.display = 'block';
+    parseError.style.display = 'none';
+    fileInput.value = '';
+  });
+
+  function handleFile(file){
+    parseError.style.display = 'none';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const rows = parseCSV(e.target.result);
+        if(!rows.length) throw new Error('empty');
+        const books = normalize(rows);
+        if(!books.length) throw new Error('no-books');
+        render(books);
+      }catch(err){
+        console.error(err);
+        showError('Не вдалося розпізнати файл. Перевірте, що це саме експорт бібліотеки Goodreads (CSV).');
+      }
+    };
+    reader.onerror = () => showError('Не вдалося прочитати файл.');
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // Self-contained CSV parser (no external deps) — handles quoted fields,
+  // escaped quotes (""), and newlines embedded inside quoted fields.
+  function parseCSV(text){
+    text = text.replace(/^\uFEFF/, ''); // strip BOM
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++){
+      const c = text[i];
+      if (inQuotes){
+        if (c === '"'){
+          if (text[i+1] === '"'){ field += '"'; i++; }
+          else { inQuotes = false; }
+        } else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ','){ row.push(field); field = ''; }
+        else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else if (c === '\r'){ /* skip, \n handles the break */ }
+        else field += c;
+      }
+    }
+    if (field.length || row.length){ row.push(field); rows.push(row); }
+    if (!rows.length) return [];
+    const header = rows.shift().map(h => h.trim());
+    return rows
+      .filter(r => r.length === header.length && r.some(v => v !== ''))
+      .map(r => {
+        const obj = {};
+        header.forEach((h, idx) => obj[h] = r[idx]);
+        return obj;
+      });
+  }
+
+  function showError(msg){
+    parseError.textContent = msg;
+    parseError.style.display = 'block';
+  }
+
+  function cleanNum(v){
+    if (v === null || v === undefined || v === '') return null;
+    const s = String(v).replace(/^="?|"$/g,'').trim();
+    if (s === '') return null;
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+  function parseDate(v){
+    if (!v) return null;
+    const parts = String(v).trim().split('/');
+    if (parts.length !== 3) return null;
+    const y = parseInt(parts[0],10), m = parseInt(parts[1],10), d = parseInt(parts[2],10);
+    if (!y || !m || !d) return null;
+    return new Date(y, m-1, d);
+  }
+  function cleanISBN(v){
+    if (!v) return null;
+    const s = String(v).replace(/^="?|"$/g,'').trim();
+    const digits = s.replace(/[^0-9Xx]/g,'');
+    if (!digits || /^0+$/.test(digits)) return null;
+    return digits;
+  }
+
+  function normalize(rows){
+    return rows
+      .filter(r => r['Title'] || r['Book Id'])
+      .map(r => ({
+        title: (r['Title']||'').trim(),
+        author: (r['Author']||'').trim(),
+        rating: cleanNum(r['My Rating']) || null,
+        pages: cleanNum(r['Number of Pages']),
+        pubYear: cleanNum(r['Original Publication Year']) || cleanNum(r['Year Published']),
+        dateRead: parseDate(r['Date Read']),
+        dateAdded: parseDate(r['Date Added']),
+        shelf: (r['Exclusive Shelf']||'').trim(),
+        readCount: cleanNum(r['Read Count']) || 0,
+        isbn: cleanISBN(r['ISBN13']) || cleanISBN(r['ISBN']),
+        publisher: (r['Publisher']||'').trim(),
+      }));
+  }
+
+  function fmt(n){ return n.toLocaleString('uk-UA'); }
+  function stars(n){ return '★'.repeat(Math.round(n)) + '☆'.repeat(5-Math.round(n)); }
+
+  // Ukrainian noun pluralization: 1 книга / 2-4 книжки / 5+ (і 11-14) книжок
+  function pluralUA(n, one, few, many){
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+  }
+
+  function render(books){
+    const read = books.filter(b => b.shelf === 'read');
+    const toRead = books.filter(b => b.shelf === 'to-read');
+    const reading = books.filter(b => b.shelf === 'currently-reading');
+
+    renderHero(read, toRead, reading);
+    renderShelf(read);
+    renderYearsChart(read);
+    renderRatingChart(read);
+    renderAuthorList(read);
+    renderDecades(read);
+    renderFacts(read, toRead, reading);
+    renderTableSection(books);
+
+    // Only switch views once every section rendered without throwing —
+    // otherwise the error message below would be hidden along with uploadStage.
+    uploadStage.style.display = 'none';
+    app.style.display = 'block';
+    topActions.style.display = 'flex';
+  }
+
+  function renderHero(read, toRead, reading){
+    const withPages = read.filter(b => b.pages);
+    const totalPages = withPages.reduce((s,b) => s + b.pages, 0);
+    const rated = read.filter(b => b.rating);
+    const avgRating = rated.length ? (rated.reduce((s,b) => s+b.rating,0)/rated.length) : 0;
+    const authors = new Set(read.map(b => b.author).filter(Boolean));
+    const years = read.map(b => b.dateRead && b.dateRead.getFullYear()).filter(Boolean);
+    const span = years.length ? Math.min(...years) + '–' + Math.max(...years) : '—';
+
+    const stats = [
+      { num: fmt(read.length), lbl:'книжок прочитано' },
+      { num: fmt(totalPages), lbl:'сторінок подолано' },
+      { num: rated.length ? avgRating.toFixed(2) : '—', lbl:'середня оцінка' },
+      { num: fmt(authors.size), lbl:'різних авторів' },
+      { num: span, lbl:'роки читання' },
+    ];
+    if (toRead.length || reading.length){
+      stats.push({ num: fmt(toRead.length), lbl:'у черзі «прочитати»' });
+    }
+
+    document.getElementById('heroGrid').innerHTML = stats.map(s => `
+      <div class="stat-card"><span class="num">${s.num}</span><span class="lbl">${s.lbl}</span></div>
+    `).join('');
+  }
+
+  function renderShelf(read){
+    const row = document.getElementById('shelfRow');
+    const legend = document.getElementById('shelfLegend');
+    if (!read.length){
+      row.innerHTML = '';
+      legend.innerHTML = '<span>Немає прочитаних книжок — почніть читати, і полиця заповниться.</span>';
+      return;
+    }
+    const withDate = read.filter(b => b.dateRead).sort((a,b) => a.dateRead - b.dateRead);
+    const list = withDate.length ? withDate : read;
+    const pagesArr = list.map(b => b.pages).filter(Boolean);
+    const minP = pagesArr.length ? Math.min(...pagesArr) : 100;
+    const maxP = pagesArr.length ? Math.max(...pagesArr) : 400;
+    const avgP = pagesArr.length ? pagesArr.reduce((s,p) => s+p, 0) / pagesArr.length : 250;
+
+    // Weight drives flex-grow so bars always fill 100% of the row's width,
+    // regardless of screen size or how many books there are.
+    function weightFor(p){
+      return p || avgP;
+    }
+    function heightFor(p){
+      if (!p) return 130;
+      if (maxP === minP) return 130;
+      const t = (p - minP) / (maxP - minP);
+      return Math.round(85 + t * 60);
+    }
+
+    row.innerHTML = list.map((b,i) => {
+      const color = ratingColor(b.rating);
+      const weight = weightFor(b.pages);
+      const h = heightFor(b.pages);
+      const reread = b.readCount > 1 ? ' reread' : '';
+      return `<div class="spine${reread}" data-i="${i}" style="flex:${weight.toFixed(2)} 1 0;height:${h}px;background:${color};"></div>`;
+    }).join('');
+
+    row.querySelectorAll('.spine').forEach(el => {
+      const b = list[+el.dataset.i];
+      el.addEventListener('mouseenter', (e) => showTooltip(e, b));
+      el.addEventListener('mousemove', (e) => positionTooltip(e));
+      el.addEventListener('mouseleave', hideTooltip);
+      el.addEventListener('touchstart', (e) => showTooltip(e.touches[0], b), { passive:true });
+    });
+
+    document.getElementById('shelfLegend').innerHTML = `
+      <span>оцінка:</span>
+      <span class="sl-ramp">
+        ${[1,2,3,4,5].map(r => `<span class="legend-dot" style="background:${ratingColor(r)}"></span>`).join('')}
+      </span>
+      <span>1 → 5 ★</span>
+    `;
+  }
+
+  function showTooltip(e, b){
+    const year = b.pubYear ? ` · ${b.pubYear}` : '';
+    const pages = b.pages ? ` · ${b.pages} стор.` : '';
+    tooltip.innerHTML = `
+      <span class="tt-title">${escapeHtml(b.title)}</span>
+      <span class="tt-meta">${escapeHtml(b.author)}${year}${pages}</span>
+      ${b.rating ? `<span class="tt-stars">${stars(b.rating)}</span>` : ''}
+    `;
+    positionTooltip(e);
+    tooltip.style.opacity = '1';
+  }
+  function positionTooltip(e){
+    tooltip.style.left = (e.clientX + 16) + 'px';
+    tooltip.style.top = (e.clientY + 16) + 'px';
+  }
+  function hideTooltip(){ tooltip.style.opacity = '0'; }
+
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderYearsChart(read){
+    const byYear = {};
+    read.forEach(b => {
+      if (!b.dateRead) return;
+      const y = b.dateRead.getFullYear();
+      byYear[y] = byYear[y] || { count:0, pages:0 };
+      byYear[y].count++;
+      byYear[y].pages += (b.pages||0);
+    });
+    const wrap = document.getElementById('yearsChart');
+    const yearsArr = Object.keys(byYear).sort();
+    if (!yearsArr.length){ wrap.innerHTML = '<p style="color:var(--ink-muted); font-size:13px;">Немає дат прочитання.</p>'; return; }
+
+    const counts = yearsArr.map(y => byYear[y].count);
+    const maxCount = Math.max(...counts);
+
+    const W = Math.max(yearsArr.length * 90, 320);
+    const H = 200;
+    const padBottom = 30;
+    const plotH = H - 30 - padBottom;
+    const step = W / yearsArr.length;
+    const barW = Math.min(40, step * 0.42);
+
+    let bars = '';
+    yearsArr.forEach((y, i) => {
+      const cx = step * i + step/2;
+      const barH = maxCount ? (counts[i]/maxCount) * plotH : 0;
+      const barX = cx - barW/2;
+      const barY = H - padBottom - barH;
+      bars += `<rect x="${barX.toFixed(1)}" y="${barY.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH,1).toFixed(1)}" fill="var(--accent)"></rect>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${(barY-10).toFixed(1)}" text-anchor="middle" class="years-num">${counts[i]}</text>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${H-8}" text-anchor="middle" class="years-yr">${y}</text>`;
+    });
+
+    wrap.innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Книжок прочитано за роками">
+        <style>
+          .years-num{ font-family:'JetBrains Mono',monospace; font-size:11px; fill:var(--ink); }
+          .years-yr{ font-family:'JetBrains Mono',monospace; font-size:11px; fill:var(--ink-muted); }
+        </style>
+        ${bars}
+      </svg>
+    `;
+  }
+
+  function renderRatingChart(read){
+    const dist = {1:0,2:0,3:0,4:0,5:0};
+    read.forEach(b => { if (b.rating && dist[Math.round(b.rating)] !== undefined) dist[Math.round(b.rating)]++; });
+    const maxCount = Math.max(1, ...Object.values(dist));
+    const wrap = document.getElementById('ratingChart');
+    wrap.innerHTML = [5,4,3,2,1].map(r => {
+      const c = dist[r];
+      const pct = Math.round((c/maxCount) * 100);
+      return `
+        <div class="rating-row">
+          <span class="rr-label">${r} ★</span>
+          <span class="rr-track"><span class="rr-fill" style="width:${pct}%;"></span></span>
+          <span class="rr-count">${c}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAuthorList(read){
+    const counts = {};
+    read.forEach(b => { if (b.author) counts[b.author] = (counts[b.author]||0) + 1; });
+    const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,6);
+    const list = document.getElementById('authorList');
+    if (!top.length){ list.innerHTML = '<li>Поки що бракує даних про авторів.</li>'; return; }
+    list.innerHTML = top.map((a,i) => `
+      <li>
+        <span class="author-rank">${String(i+1).padStart(2,'0')}</span>
+        <span class="author-name">${escapeHtml(a[0])}</span>
+        <span class="author-count">× ${a[1]}</span>
+      </li>
+    `).join('');
+  }
+
+  function renderDecades(read){
+    const withPub = read.filter(b => b.pubYear);
+    const ruler = document.getElementById('decadeRuler');
+    if (!withPub.length){ ruler.innerHTML = '<p style="color:var(--ink-muted); font-size:13px;">Немає даних про рік видання.</p>'; return; }
+    const dist = {};
+    withPub.forEach(b => {
+      const dec = Math.floor(b.pubYear/10)*10;
+      dist[dec] = (dist[dec]||0) + 1;
+    });
+    const minDec = Math.min(...Object.keys(dist).map(Number));
+    const maxDec = Math.max(...Object.keys(dist).map(Number));
+    const decades = [];
+    for (let d = minDec; d <= maxDec; d += 10) decades.push(d);
+    const maxCount = Math.max(...Object.values(dist));
+
+    ruler.innerHTML = decades.map(d => {
+      const c = dist[d] || 0;
+      const h = c ? Math.max(6, Math.round((c/maxCount) * 100)) : 2;
+      return `
+        <div class="decade-col" title="${d}-ті: ${c}">
+          <span class="decade-count">${c || ''}</span>
+          <div class="decade-bar" style="height:${h}px;"></div>
+          <span class="decade-label">${d}s</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderFacts(read, toRead, reading){
+    const facts = [];
+    const withPages = read.filter(b => b.pages);
+    if (withPages.length){
+      const longest = withPages.reduce((a,b) => b.pages > a.pages ? b : a);
+      const shortest = withPages.reduce((a,b) => b.pages < a.pages ? b : a);
+      facts.push({ k:'Найдовший том', v: longest.title, s: `${escapeHtml(longest.author)} · ${longest.pages} стор.` });
+      facts.push({ k:'Найкоротший том', v: shortest.title, s: `${escapeHtml(shortest.author)} · ${shortest.pages} стор.` });
+    }
+    const withPub = read.filter(b => b.pubYear);
+    if (withPub.length){
+      const oldest = withPub.reduce((a,b) => b.pubYear < a.pubYear ? b : a);
+      const newest = withPub.reduce((a,b) => b.pubYear > a.pubYear ? b : a);
+      facts.push({ k:'Найстаріше видання', v: oldest.title, s: `${oldest.pubYear} рік · ${escapeHtml(oldest.author)}` });
+      facts.push({ k:'Найновіше видання', v: newest.title, s: `${newest.pubYear} рік · ${escapeHtml(newest.author)}` });
+    }
+    const rereads = read.filter(b => b.readCount > 1);
+    if (rereads.length){
+      facts.push({ k:'Перечитано', v: rereads.map(b=>b.title).join(', '), s: `${rereads.length} ${pluralUA(rereads.length,'книжка','книжки','книжок')} ${rereads.length===1?'варта':'варті'} другого разу` });
+    } else {
+      facts.push({ k:'Перечитування', v:'Поки що жодного разу', s:'кожна книжка — новий досвід' });
+    }
+    const withBothDates = read.filter(b => b.dateRead && b.dateAdded && b.dateRead >= b.dateAdded);
+    if (withBothDates.length){
+      const longestWait = withBothDates.reduce((a,b) => {
+        const da = Math.round((a.dateRead-a.dateAdded)/86400000);
+        const db = Math.round((b.dateRead-b.dateAdded)/86400000);
+        return db > da ? b : a;
+      });
+      const days = Math.round((longestWait.dateRead - longestWait.dateAdded)/86400000);
+      facts.push({ k:'Найдовше чекала на полиці', v: longestWait.title, s: `${days} ${pluralUA(days,'день','дні','днів')} від додавання до читання` });
+    }
+    if (reading.length){
+      facts.push({ k:'Зараз у читанні', v: reading.map(b=>b.title).join(', '), s: `${escapeHtml(reading.map(b=>b.author).join(', '))}` });
+    }
+    if (toRead.length){
+      const sorted = toRead.filter(b=>b.dateAdded).sort((a,b) => a.dateAdded - b.dateAdded);
+      const oldest = sorted[0];
+      facts.push({
+        k:'У черзі «прочитати»',
+        v: `${toRead.length} ${pluralUA(toRead.length,'книжка','книжки','книжок')} ${toRead.length===1?'чекає':'чекають'}`,
+        s: oldest ? `найдовше — «${escapeHtml(oldest.title)}»` : ''
+      });
+    }
+
+    document.getElementById('factsGrid').innerHTML = facts.map(f => `
+      <div class="fact-card">
+        <span class="fk">${f.k}</span>
+        <span class="fv">${escapeHtml(f.v)}</span>
+        <span class="fs">${f.s || ''}</span>
+      </div>
+    `).join('');
+  }
+
+  const shelfLabels = { 'read':'прочитано', 'to-read':'у черзі', 'currently-reading':'читаю зараз' };
+  function shelfLabel(s){ return shelfLabels[s] || s || '—'; }
+
+  function formatDateUA(d){
+    if (!d) return '—';
+    const pad = n => String(n).padStart(2,'0');
+    return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+  }
+
+  function renderTableSection(books){
+    tableBooksAll = books;
+    tableQuery = '';
+    tableSearch.value = '';
+    tableSort = { key:'title', dir:1 };
+    renderTableBody();
+  }
+
+  // Nulls always sort to the bottom regardless of direction; strings compare
+  // with the Ukrainian locale, everything else compares numerically/by time.
+  function compareBooks(a, b, key, dir){
+    let va = a[key], vb = b[key];
+    const aEmpty = (va === null || va === undefined || va === '');
+    const bEmpty = (vb === null || vb === undefined || vb === '');
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+    if (va instanceof Date) va = va.getTime();
+    if (vb instanceof Date) vb = vb.getTime();
+    if (typeof va === 'string') return dir * va.localeCompare(vb, 'uk');
+    return dir * (va - vb);
+  }
+
+  function renderTableBody(){
+    tableHeaders.forEach(th => {
+      const active = th.dataset.key === tableSort.key;
+      th.classList.toggle('sort-active', active);
+      const arrow = active ? `<span class="arrow">${tableSort.dir === 1 ? '↑' : '↓'}</span>` : '';
+      th.innerHTML = th.textContent.replace(/\s*[↑↓]?$/, '').trim() + arrow;
+    });
+
+    let list = tableBooksAll;
+    if (tableQuery){
+      list = list.filter(b =>
+        (b.title||'').toLowerCase().includes(tableQuery) ||
+        (b.author||'').toLowerCase().includes(tableQuery) ||
+        (b.publisher||'').toLowerCase().includes(tableQuery)
+      );
+    }
+    list = list.slice().sort((a,b) => compareBooks(a, b, tableSort.key, tableSort.dir));
+
+    if (!list.length){
+      tableBody.innerHTML = `<tr><td class="empty-row" colspan="10">Нічого не знайдено.</td></tr>`;
+    } else {
+      tableBody.innerHTML = list.map(b => `
+        <tr>
+          <td class="title-cell">${escapeHtml(b.title) || '—'}</td>
+          <td>${escapeHtml(b.author) || '—'}</td>
+          <td class="muted">${shelfLabel(b.shelf)}</td>
+          <td>${b.rating ? b.rating.toFixed(0) + ' ★' : '—'}</td>
+          <td>${b.pages ?? '—'}</td>
+          <td>${b.pubYear ?? '—'}</td>
+          <td class="muted">${formatDateUA(b.dateRead)}</td>
+          <td class="muted">${formatDateUA(b.dateAdded)}</td>
+          <td>${b.readCount ? b.readCount : (b.shelf === 'read' ? 1 : '—')}</td>
+          <td class="muted">${escapeHtml(b.publisher) || '—'}</td>
+        </tr>
+      `).join('');
+    }
+
+    tableMeta.textContent = tableQuery
+      ? `Показано ${list.length} з ${tableBooksAll.length}`
+      : `Усього: ${tableBooksAll.length}`;
+  }
+
+})();
+</script>
+</body>
+</html>
